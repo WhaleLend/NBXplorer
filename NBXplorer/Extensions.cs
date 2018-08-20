@@ -1,33 +1,26 @@
-﻿using Microsoft.AspNetCore.Hosting;
-using System.Linq;
-using Microsoft.Extensions.Logging;
+﻿using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Options;
 using NBitcoin;
+using NBitcoin.Crypto;
+using NBitcoin.RPC;
+using NBXplorer.Authentication;
 using NBXplorer.Configuration;
+using NBXplorer.DerivationStrategy;
+using NBXplorer.Filters;
+using NBXplorer.MessageBrokers;
+using NBXplorer.Models;
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
-using Microsoft.AspNetCore.Mvc.ModelBinding.Validation;
-using Microsoft.AspNetCore.Mvc;
-using NBXplorer.Filters;
-using Microsoft.AspNetCore.Builder;
-using Microsoft.Extensions.Options;
-using Microsoft.Extensions.Configuration;
-using NBXplorer.DerivationStrategy;
-using NBitcoin.Crypto;
-using NBXplorer.Models;
-using System.IO;
-using NBXplorer.Logging;
-using System.Net;
-using NBitcoin.RPC;
-using Microsoft.Extensions.Hosting;
-using System.Threading.Tasks;
 using System.Threading;
-using Microsoft.AspNetCore.Authentication;
-using NBXplorer.Authentication;
-using NBitcoin.DataEncoders;
-using NBXplorer.MessageBrokers;
+using System.Threading.Tasks;
 
 namespace NBXplorer
 {
@@ -172,6 +165,8 @@ namespace NBXplorer
 			services.TryAddSingleton<CookieRepository>();
 			services.TryAddSingleton<RepositoryProvider>();
 			services.TryAddSingleton<EventAggregator>();
+			services.TryAddSingleton<AddressPoolServiceAccessor>();
+			services.AddSingleton<IHostedService, AddressPoolService>();
 			services.TryAddSingleton<BitcoinDWaitersAccessor>();
 			services.AddSingleton<IHostedService, BitcoinDWaiters>();
 			services.AddSingleton<IHostedService, AzureServiceBus>();
@@ -194,6 +189,16 @@ namespace NBXplorer
 				o.LoadArgs(conf);
 			});
 			return services;
+		}
+
+		internal static string ToPrettyStrategyString(this DerivationStrategyBase strat)
+		{
+			var strategy = strat.ToString();
+			if(strategy.Length > 35)
+			{
+				strategy = strategy.Substring(0, 10) + "..." + strategy.Substring(strategy.Length - 20);
+			}
+			return strategy;
 		}
 
 		internal class NoObjectModelValidator : IObjectModelValidator
