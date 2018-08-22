@@ -26,7 +26,6 @@ namespace NBXplorer
 		{
 			services.AddNBXplorer();
 			services.ConfigureNBxplorer(Configuration);
-			services.AddMessageBrokers(Configuration);
 			services.AddMvcCore()
 				.AddJsonFormatters()
 				.AddAuthorization()

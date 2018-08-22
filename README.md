@@ -163,21 +163,34 @@ this should return a JSON payload e.g.
 
 ## Message Brokers
 ### Azure Service Bus
-Support has been added for Azure Service Bus as a message broker. Currently only 2 queues are supported
+Support has been added for Azure Service Bus as a message broker. Currently 2 Queues and 2 Topics are supported
 
+### Queues
 * New Block
 * New Transaction
 
-Block messages are filtered based on the Crypto currency filter in the config file. All Transactions for registered Derivation Schemes will be reported. 
+### Topics
+* New Block
+* New Transaction
 
-To activate Azure Service Bus Mesages you should add an Azure Service Bus Connection string to your config file or on the command line. You can optionally specify the queue names, or they will be defaulted.
+
+Filters should be applied on the client, if required. 
+
+To activate Azure Service Bus Mesages you should add an Azure Service Bus Connection string to your config file or on the command line.
+
+* To use queues you should specify the queue names you wish to use
+* To use topics you should specify the topic names you wish to use
+
+You can use both queues and topics at the same time.
 
 #### Config Settings
 asbcnstr="[Your Azure Service Bus Connection string]"
-asbblockq="[Name of queue to send New Block message to]" (default : newblock)
-asbtranq="[Name of queue to send New Transaction message to]" (default: newtransaction)
+asbblockq="[Name of queue to send New Block message to]" 
+asbtranq="[Name of queue to send New Transaction message to]"
+asbblockt="[Name of topic to send New Block message to]" 
+asbtrant="[Name of queue to send New Transaction message to]" 
 
-Payloads are JSON , defined in JBlock and JSimpleTransaction classes.
+Payloads are JSON and map to NewBlockEvent, NewTransactionEvent in the NBXplorer.Models namespace. There is no support in NBXplorer client for Azure Service Bus at the current time. You will need to use the Serializer in NBXplorer.Client to De-serialize the objects or then implement your own JSON de-serializers for the custom types used in the payload.
 
 
 #### Troubleshooting
@@ -215,7 +228,7 @@ Then run the tests.
 
 ## Licence
 
-This project is under MIT License.
+This project is under [MIT](https://github.com/dgarage/NBXplorer/blob/master/LICENSE) License.
 
 ## Special thanks
 

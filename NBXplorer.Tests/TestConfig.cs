@@ -22,6 +22,21 @@ namespace NBXplorer.Tests
 				return "newblock";
 			}
 		}
+		public static string NewBlockTopic
+		{
+			get
+			{
+				return "newbitcoinblock";
+			}
+		}
+
+		public static string NewBlockSubscription
+		{
+			get
+			{
+				return "NewBlock";
+			}
+		}
 
 		public static string NewTransactionQueue
 		{
@@ -30,5 +45,22 @@ namespace NBXplorer.Tests
 				return "newtransaction";
 			}
 		}
+
+		public static string NewTransactionTopic
+		{
+			get
+			{
+				return "newbitcointransaction";
+			}
+		}
+
+		public static string NewTransactionSubscription
+		{
+			get
+			{
+				return "NewTransaction";
+			}
+		}
+
 	}
 }

@@ -15,6 +15,7 @@ using Newtonsoft.Json.Linq;
 using Microsoft.Azure.ServiceBus;
 using Microsoft.Azure.ServiceBus.Core;
 using Newtonsoft.Json;
+using System.Collections.Concurrent;
 
 namespace NBXplorer.Tests
 {
@@ -313,9 +314,9 @@ namespace NBXplorer.Tests
 
 			Assert.False(string.IsNullOrWhiteSpace(AzureServiceBusTestConfig.NewBlockQueue), "Please Set Azure Service Bus NewBlockQueue name in TestConfig.cs AzureServiceBusTestConfig Class. ");
 
+			Assert.False(string.IsNullOrWhiteSpace(AzureServiceBusTestConfig.NewBlockTopic), "Please Set Azure Service Bus NewBlockTopic name in TestConfig.cs AzureServiceBusTestConfig Class. ");
 
-			
-			
+			Assert.False(string.IsNullOrWhiteSpace(AzureServiceBusTestConfig.NewBlockSubscription), "Please Set Azure Service Bus NewBlock Subscription name in TestConfig.cs AzureServiceBusTestConfig Class. ");
 
 
 			using (var tester = ServerTester.Create())
@@ -326,9 +327,30 @@ namespace NBXplorer.Tests
 				tester.Client.Track(pubkey);
 
 				IQueueClient blockClient = new QueueClient(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewBlockQueue);
+				ISubscriptionClient subscriptionClient = new SubscriptionClient(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewBlockTopic, AzureServiceBusTestConfig.NewBlockSubscription);
 
-				
+				//Configure Service Bus Subscription callback
+				Message subscriptionMessage = null;
 
+				//We may have existing messages from other tests - push all message to a LIFO stack
+				var busMessages = new ConcurrentStack<Message>();
+
+				var messageHandlerOptions = new MessageHandlerOptions((e) => { throw e.Exception; })
+				{
+					// Maximum number of Concurrent calls to the callback `ProcessMessagesAsync`, set to 1 for simplicity.
+					// Set it according to how many messages the application wants to process in parallel.
+					MaxConcurrentCalls = 1,
+
+					// Indicates whether MessagePump should automatically complete the messages after returning from User Callback.
+					// False below indicates the Complete will be handled by the User Callback as in `ProcessMessagesAsync` below.
+					AutoComplete = false
+				};
+
+				//Service Bus Topic Message Handler
+				subscriptionClient.RegisterMessageHandler(async (m, t) => { busMessages.Push( m) ; await subscriptionClient.CompleteAsync(m.SystemProperties.LockToken); }, messageHandlerOptions);
+
+
+				//Test Service Bus Queue
 				//Retry 10 times 
 				var retryPolicy = new RetryExponential(new TimeSpan(0, 0, 0, 0, 500), new TimeSpan(0, 0, 1), 10);
 
@@ -341,9 +363,8 @@ namespace NBXplorer.Tests
 					// Batch the receive operation
 					var brokeredMessages = await messageReceiver.ReceiveAsync(300);
 				}
-				await messageReceiver.CloseAsync();		//Close queue , otherwise receiver will consume our test message
-
-
+				await messageReceiver.CloseAsync();     //Close queue , otherwise receiver will consume our test message
+				
 				messageReceiver = new MessageReceiver(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewBlockQueue, ReceiveMode.ReceiveAndDelete, retryPolicy);
 
 				//Create a new Block - AzureServiceBus broker will receive a message from EventAggregator and publish to queue
@@ -351,16 +372,39 @@ namespace NBXplorer.Tests
 
 				msg = await messageReceiver.ReceiveAsync();
 
+				JsonSerializerSettings settings = new JsonSerializerSettings();
+				new Serializer(Network.RegTest).ConfigureSerializer(settings);
+				
+				//Check Queue payload
 				if (msg != null)
 				{
-					dynamic blockEvent = JsonConvert.DeserializeObject (Encoding.UTF8.GetString(msg.Body));
+					Assert.Equal(msg.ContentType, typeof(NewBlockEvent).ToString());
+
+					var blockEventQ = JsonConvert.DeserializeObject<NewBlockEvent>(Encoding.UTF8.GetString(msg.Body), settings);
+					Assert.IsType<Models.NewBlockEvent>(blockEventQ);
 					Assert.Equal(expectedBlockId.ToString().ToUpperInvariant(), msg.MessageId.ToUpperInvariant());
-					Assert.Equal(expectedBlockId.ToString(), blockEvent.Hash.ToString());
-					Assert.NotEqual(0, Convert.ToInt32(blockEvent.Height));						
+					Assert.Equal(expectedBlockId, blockEventQ.Hash);
+					Assert.NotEqual(0, blockEventQ.Height);						
 				}
 				else
 				{
 					throw new Exception($"No message received on Azure Service Bus Block Queue : {AzureServiceBusTestConfig.NewBlockQueue} after 10 read attempts.");
+				}
+				
+				//Check Service Bus Topic Payload
+				if (busMessages.Count > 0)
+				{
+					Message busMsg = null;
+					busMessages.TryPop(out busMsg);
+					var blockEventS = JsonConvert.DeserializeObject<Models.NewBlockEvent>(Encoding.UTF8.GetString(busMsg.Body), settings);
+					Assert.IsType<Models.NewBlockEvent>(blockEventS);
+					Assert.Equal(expectedBlockId.ToString().ToUpperInvariant(), busMsg.MessageId.ToUpperInvariant());
+					Assert.Equal(expectedBlockId, blockEventS.Hash);
+					Assert.NotEqual(0, blockEventS.Height);
+				}
+				else
+				{
+					throw new Exception($"No message received on Azure Service Bus Block Topic : {AzureServiceBusTestConfig.NewBlockTopic}.");
 				}
 			}
 		}
@@ -372,6 +416,8 @@ namespace NBXplorer.Tests
 
 			Assert.False(string.IsNullOrWhiteSpace(AzureServiceBusTestConfig.NewTransactionQueue), "Please Set Azure Service Bus NewTransactionQueue name in TestConfig.cs AzureServiceBusTestConfig Class.");
 
+			Assert.False(string.IsNullOrWhiteSpace(AzureServiceBusTestConfig.NewTransactionSubscription), "Please Set Azure Service Bus NewTransactionSubscription name in TestConfig.cs AzureServiceBusTestConfig Class.");
+
 
 			using (var tester = ServerTester.Create())
 			{
@@ -381,14 +427,36 @@ namespace NBXplorer.Tests
 				tester.Client.Track(pubkey);
 
 				IQueueClient tranClient = new QueueClient(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewTransactionQueue);
+				ISubscriptionClient subscriptionClient = new SubscriptionClient(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewTransactionTopic, AzureServiceBusTestConfig.NewTransactionSubscription);
 
+				//Configure Service Bus Subscription callback				
+				//We may have existing messages from other tests - push all message to a LIFO stack
+				var busMessages = new ConcurrentStack<Message>();
+
+				var messageHandlerOptions = new MessageHandlerOptions((e) => { throw e.Exception; })
+				{
+					// Maximum number of Concurrent calls to the callback `ProcessMessagesAsync`, set to 1 for simplicity.
+					// Set it according to how many messages the application wants to process in parallel.
+					MaxConcurrentCalls = 1,
+
+					// Indicates whether MessagePump should automatically complete the messages after returning from User Callback.
+					// False below indicates the Complete will be handled by the User Callback as in `ProcessMessagesAsync` below.
+					AutoComplete = false
+				};
+				
+				//Service Bus Topic Message Handler
+				subscriptionClient.RegisterMessageHandler(async (m, t) => { busMessages.Push(m); await subscriptionClient.CompleteAsync(m.SystemProperties.LockToken); }, messageHandlerOptions);
+
+				//Configure JSON custom serialization
+				JsonSerializerSettings settings = new JsonSerializerSettings();
+				new Serializer(Network.RegTest).ConfigureSerializer(settings);
+
+				//Test Service Bus Queue
 				//Retry 10 times 
 				var retryPolicy = new RetryExponential(new TimeSpan(0,0,0,0,500), new TimeSpan(0, 0, 1), 10);
 
-				//Check if message exists
+				//Setup Message Receiver and clear queue
 				var messageReceiver = new MessageReceiver(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewTransactionQueue, ReceiveMode.ReceiveAndDelete, retryPolicy);
-				
-				//Clear any existing messages from the queue
 				while (await messageReceiver.PeekAsync() != null)
 				{
 					// Batch the receive operation
@@ -396,23 +464,39 @@ namespace NBXplorer.Tests
 				}
 				await messageReceiver.CloseAsync();
 
-				messageReceiver = new MessageReceiver(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewTransactionQueue, ReceiveMode.ReceiveAndDelete, retryPolicy);
 
+				//New message receiver to listen to our test event
+				messageReceiver = new MessageReceiver(AzureServiceBusTestConfig.ConnectionString, AzureServiceBusTestConfig.NewTransactionQueue, ReceiveMode.ReceiveAndDelete, retryPolicy);
 
 				//Create a new UTXO for our tracked key
 				tester.Explorer.CreateRPCClient().SendToAddress(tester.AddressOf(pubkey, "0/1"), Money.Coins(1.0m));
 
-				Microsoft.Azure.ServiceBus.Message msg = null;
+				//Check Queue Message
+				Message msg = null;
 				msg = await messageReceiver.ReceiveAsync();
 
 				if (msg != null)
 				{
-					dynamic txEvent = JsonConvert.DeserializeObject(Encoding.UTF8.GetString(msg.Body));
-					Assert.Equal(txEvent.DerivationStrategy.ToString(), pubkey.ToString());
+					var txEventQ = JsonConvert.DeserializeObject<NewTransactionEvent>(Encoding.UTF8.GetString(msg.Body),settings);
+					Assert.Equal(txEventQ.DerivationStrategy, pubkey);
 				}
 				else
 				{
 					throw new Exception($"No message received on Azure Service Bus Transaction Queue : {AzureServiceBusTestConfig.NewTransactionQueue} after 10 read attempts.");
+				}
+
+				//Check Service Bus Topic Payload
+				if (busMessages.Count > 0)
+				{
+					Message busMsg = null;
+					busMessages.TryPop(out busMsg);
+					var blockEventS = JsonConvert.DeserializeObject<NewTransactionEvent>(Encoding.UTF8.GetString(busMsg.Body), settings);
+					Assert.IsType<NewTransactionEvent>(blockEventS);
+					Assert.Equal(blockEventS.DerivationStrategy, pubkey);
+				}
+				else
+				{
+					throw new Exception($"No message received on Azure Service Bus Transaction Topic : {AzureServiceBusTestConfig.NewTransactionTopic}.");
 				}
 			}
 		}

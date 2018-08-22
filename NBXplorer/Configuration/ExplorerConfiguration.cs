@@ -174,9 +174,11 @@ namespace NBXplorer.Configuration
 			CacheChain = config.GetOrDefault<bool>("cachechain", true);
 			NoAuthentication = config.GetOrDefault<bool>("noauth", false);
 
-			AzureServiceBusBlockQueue = config.GetOrDefault<string>("asbblockq", "newblock");
-			AzureServiceBusTransactionQueue = config.GetOrDefault<string>("asbtranq", "newtransaction");
 			AzureServiceBusConnectionString = config.GetOrDefault<string>("asbcnstr", "");
+			AzureServiceBusBlockQueue = config.GetOrDefault<string>("asbblockq", "");
+			AzureServiceBusTransactionQueue = config.GetOrDefault<string>("asbtranq", "");
+			AzureServiceBusBlockTopic = config.GetOrDefault<string>("asbblockt", "");
+			AzureServiceBusTransactionTopic = config.GetOrDefault<string>("asbtrant", "");
 
 			return this;
 		}
@@ -209,10 +211,22 @@ namespace NBXplorer.Configuration
 			set;
 		}
 
+		public string AzureServiceBusBlockTopic
+		{
+			get;
+			set;
+		}
+
 		public string AzureServiceBusTransactionQueue
 		{
 			get;
 			set;
 		}
+		public string AzureServiceBusTransactionTopic
+		{
+			get;
+			set;
+		}
+		
 	}
 }

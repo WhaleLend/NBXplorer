@@ -25,5 +25,10 @@ namespace NBXplorer.Models
 
 			return jobj;
 		}
+
+		public string ToJson(JsonSerializerSettings settings)
+		{
+			return JsonConvert.SerializeObject(this, settings);
+		}
 	}
 }
